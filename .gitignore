@@ -6,3 +6,5 @@ dist/
 # Remote rules from GitHub
 *.log
 .DS_Store
+*.log
+__pycache__/
