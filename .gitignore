@@ -1,10 +1,10 @@
-
-# Your local rules
 node_modules/
 dist/
 
-# Remote rules from GitHub
+
 *.log
 .DS_Store
 *.log
+*.txt
+*.sqlite
 __pycache__/
