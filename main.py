@@ -19,8 +19,19 @@ def get_mac_addr(bytes_addr):
     bytes_str = map('{:02x}'.format, bytes_addr)
     return ':'.join(bytes_str).upper()
 
-def ethernet_frame(data):
+def ipv4_packet(data):
+    version_header_length = data[0]
+    version = version_header_length >> 4
+    header_length = (version_header_length & 15) * 4
+    
+    ttl, proto, src, target = struct.unpack('! 8x B B 2x 4s 4s', data[:20])
+    return version, header_length, ttl, proto, ipv4(src), ipv4(target), data[header_length:]
 
+
+def ipv4(addr):
+    return socket.inet_ntoa(addr)
+
+def ethernet_frame(data):
     dest_mac, src_mac, proto = struct.unpack('! 6s 6s H', data[:14])
     return get_mac_addr(dest_mac), get_mac_addr(src_mac), socket.htons(proto), data[14:]
 
@@ -33,7 +44,7 @@ def start_sniffer():
 / ____ \| |___  | | | |  | | |____| | \ \ _| |_ ____) | |\  | |____   | |   
 /_/    \_\____| |_| |_|  |_|______|_|  \_\_____|_____/|_| \_|______|  |_|   
     
-    [*] [Linux] AetherisNET v0.2 - Ethernet Decoder
+    [*] [Linux] AetherisNET v0.3 - IPv4 Layer Decoder
           
     """)
 
@@ -49,23 +60,24 @@ def start_sniffer():
         print(f"\n[!] Error initializing socket: {e}")
         sys.exit(1)
 
-    print("[*] Sniffer started successfully. Listening for packets", end="")
+    print("[*] Sniffer started successfully. Listening for IPv4 traffic", end="")
     effect()
 
     try:
         while True:
             raw_data, addr = sniffer.recvfrom(65535)
-            
-
             dest_mac, src_mac, eth_proto, data = ethernet_frame(raw_data)
-            
-            print(f"[+] Ethernet Frame | Dest: {dest_mac} | Src: {src_mac} | Protocol: {eth_proto}")
+
+          
+            if eth_proto == 8:
+                version, header_length, ttl, proto, src, target, data = ipv4_packet(data)
+                
+                print(f"IPv4 Packet | SRC: {src} ==> DEST: {target} | Protocol: {proto}")
             
     except KeyboardInterrupt:
         print("\n[*] Stopping sniffer", end="")
         effect()
         sys.exit(0)
-
 
 if __name__ == "__main__":
     start_sniffer()
