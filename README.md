@@ -74,12 +74,6 @@ We welcome contributions — see `CONTRIBUTING.md` for details.
 ## Releases & Changelog
 See `CHANGELOG.md` for release notes and history.
 
-## Demo / Screenshots
-- Add an animated GIF or asciinema recording to showcase the dashboard. Example placeholder:
-
-```
-![demo](docs/demo.gif)
-```
 
 You can generate a demo GIF locally using `asciinema` + `agg` or `ttyrec` + `gifenc` and then add it to `docs/demo.gif`.
 
