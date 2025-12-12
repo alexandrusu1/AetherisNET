@@ -2,24 +2,23 @@ import socket
 import sys
 import time
 import struct
+import curses
 from collections import defaultdict
 
-RED = "\033[91m"
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RESET = "\033[0m"
+ETH_P_ALL = 3
+THRESHOLD = 15
+
+stats = {
+    "TCP": 0,
+    "UDP": 0,
+    "ICMP": 0,
+    "TOTAL": 0,
+    "ALERTS": 0
+}
 
 syn_counter = defaultdict(int)
-THRESHOLD = 15 
-
-def effect():
-    print(".", end="", flush=True)
-    time.sleep(1)
-    print(".", end="", flush=True)
-    time.sleep(1)
-    print(".", end="", flush=True)
-    time.sleep(1)
-    print()
+logs = [] 
+MAX_LOGS = 10 
 
 def get_mac_addr(bytes_addr):
     bytes_str = map('{:02x}'.format, bytes_addr)
@@ -49,57 +48,116 @@ def ethernet_frame(data):
     dest_mac, src_mac, proto = struct.unpack('! 6s 6s H', data[:14])
     return get_mac_addr(dest_mac), get_mac_addr(src_mac), socket.htons(proto), data[14:]
 
-def start_sniffer():
-    print(r"""
-    _    _____ _______ _    _ ______ _____  _____  _____ _   _ ______ _______ 
-   | |  |  ___|_   _| |  | |  ____|  __ \|_   _|/ ____| \ | |  ____|__   __|
-  / _ \ | |__   | | | |__| | |__  | |__) | | | | (___ |  \| | |__     | |   
- / /_\ \|  __|  | | |  __  |  __| |  _  /  | |  \___ \| . ` |  __|    | |   
-/ ____ \| |___  | | | |  | | |____| | \ \ _| |_ ____) | |\  | |____   | |   
-/_/    \_\____| |_| |_|  |_|______|_|  \_\_____|_____/|_| \_|______|  |_|   
-    
-    [*] [Linux] AetherisNET v0.5 - Security Brain (IDS Engine)
-          
-    """)
+def draw_dashboard(stdscr):
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(1, curses.COLOR_GREEN, -1)
+    curses.init_pair(2, curses.COLOR_RED, -1)
+    curses.init_pair(3, curses.COLOR_YELLOW, -1)
+    curses.init_pair(4, curses.COLOR_CYAN, -1)
 
-    ETH_P_ALL = 3
+    curses.curs_set(0)
+    stdscr.nodelay(True) 
 
     try:
         sniffer = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(ETH_P_ALL))
+        sniffer.setblocking(False) 
     except PermissionError:
-        print(f"\n{RED}[!] CRITICAL ERROR: Access denied. Run with sudo.{RESET}")
-        sys.exit(1)
+        stdscr.addstr(0, 0, "CRITICAL ERROR: Run with SUDO!", curses.color_pair(2))
+        stdscr.refresh()
+        time.sleep(3)
+        return
 
-    print(f"{GREEN}[*] IDS Engine Initialized. Watching for Port Scanners{RESET}", end="")
-    effect()
+    while True:
+        stdscr.erase()
+        height, width = stdscr.getmaxyx()
 
-    try:
-        while True:
+        if height < 12 or width < 40:
+            stdscr.addstr(0, 0, "Terminal too small!", curses.color_pair(2))
+            stdscr.addstr(1, 0, "Please resize...", curses.color_pair(2))
+            stdscr.refresh()
+            time.sleep(0.5)
+            continue
+
+        try:
+            title = " AetherisNET v1.0 - Network Monitor & IDS "
+            stdscr.attron(curses.color_pair(4) | curses.A_BOLD)
+            safe_width = width - 1
+            stdscr.addstr(0, 0, (title + " " * width)[:safe_width]) 
+            stdscr.attroff(curses.color_pair(4) | curses.A_BOLD)
+
+            stdscr.addstr(2, 2, f"TOTAL PACKETS: {stats['TOTAL']}")
+            stdscr.addstr(3, 2, f"TCP TRAFFIC:   {stats['TCP']}", curses.color_pair(1))
+            stdscr.addstr(4, 2, f"UDP TRAFFIC:   {stats['UDP']}", curses.color_pair(3))
+            
+            alert_style = curses.color_pair(2) | curses.A_BOLD if stats['ALERTS'] > 0 else curses.color_pair(1)
+            stdscr.addstr(6, 2, f"[!] THREATS DETECTED: {stats['ALERTS']}", alert_style)
+
+            stdscr.addstr(8, 0, "-" * (width - 1)) 
+            stdscr.addstr(9, 2, "LIVE TRAFFIC LOGS:", curses.A_UNDERLINE)
+
+            row = 11
+            for log in logs[-MAX_LOGS:]: 
+                if row < height - 1:
+                    color = curses.color_pair(2) if "ALERT" in log else curses.color_pair(1)
+                    stdscr.addstr(row, 2, log[:width-4], color)
+                    row += 1
+        except curses.error:
+            pass
+
+        try:
             raw_data, addr = sniffer.recvfrom(65535)
+            stats['TOTAL'] += 1
+            
             dest_mac, src_mac, eth_proto, data = ethernet_frame(raw_data)
 
             if eth_proto == 8: 
                 version, header_length, ttl, proto, src, target, data = ipv4_packet(data)
                 
-                if proto == 6: 
-                    src_port, dest_port, sequence, acknowledgment, flags, data = tcp_segment(data)
+                log_msg = ""
 
-                    if (flags & 0x02) and not (flags & 0x10):
+                if proto == 6: 
+                    stats['TCP'] += 1
+                    src_port, dest_port, seq, ack, flags, data = tcp_segment(data)
+                    
+                    if (flags & 0x02) and not (flags & 0x10): 
                         syn_counter[src] += 1
-                        
                         if syn_counter[src] > THRESHOLD:
-                            print(f"{RED}[!!!] ALERT: PORT SCAN DETECTED from {src} -> Targets Hit: {syn_counter[src]}{RESET}")
+                            stats['ALERTS'] += 1
+                            log_msg = f"[!!!] ALERT: SYN SCAN from {src} -> {target}"
                         else:
-                            print(f"{YELLOW}[?] Suspicious SYN Packet: {src}:{src_port} -> {target}:{dest_port}{RESET}")
-                            
+                            log_msg = f"[?] SUSPICIOUS: SYN packet {src} -> {target}"
                     else:
-                        pass
+                        log_msg = f"[TCP] {src}:{src_port} -> {target}:{dest_port}"
+
+                elif proto == 17: 
+                    stats['UDP'] += 1
+                    src_port, dest_port, size, data = udp_segment(data)
+                    log_msg = f"[UDP] {src}:{src_port} -> {target}:{dest_port}"
                 
-                
-    except KeyboardInterrupt:
-        print("\n[*] Stopping sniffer", end="")
-        effect()
-        sys.exit(0)
+                else:
+                    stats['ICMP'] += 1
+                    log_msg = f"[IPv4-Other] {src} -> {target}"
+
+                if log_msg:
+                    logs.append(log_msg)
+                    if len(logs) > MAX_LOGS:
+                        logs.pop(0)
+
+        except BlockingIOError:
+            pass
+        except Exception:
+            pass
+
+        try:
+            key = stdscr.getch()
+            if key == ord('q'):
+                break
+        except:
+            pass
+        
+        stdscr.refresh()
+        time.sleep(0.1)
 
 if __name__ == "__main__":
-    start_sniffer()
+    curses.wrapper(draw_dashboard)
