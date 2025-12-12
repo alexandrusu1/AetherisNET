@@ -114,23 +114,27 @@ def start_dashboard(stdscr, args):
                     row += 1
 
         try:
-            for _ in range(15): 
+            for _ in range(15):
                 raw_data, addr = sniffer.recvfrom(65535)
-                
+
                 if args.pcap:
                     save_pcap(raw_data)
 
                 packet_count_second += 1
                 stats['TOTAL'] += 1
-                
+
                 dest_mac, src_mac, eth_proto, data = ethernet_frame(raw_data)
 
-                if eth_proto == 8: 
+      
+                if eth_proto == 0x0800:
                     version, header_length, ttl, proto, src, target, data = ipv4_packet(data)
+                   
+                    if args.host_only and src != LOCAL_IP and target != LOCAL_IP:
+                        continue
                     log_msg = ""
                     app_layer_info = None
 
-                    if proto == 6: 
+                    if proto == 6:
                         stats['TCP'] += 1
                         src_port, dest_port, seq, ack, flags, data = tcp_segment(data)
                         
@@ -140,8 +144,9 @@ def start_dashboard(stdscr, args):
                             if "Encrypted Data" not in app_layer_info:
                                 log_msg = app_layer_info
                         
-                        elif (flags & 0x02) and not (flags & 0x10): 
-                             if src != LOCAL_IP:
+                        elif (flags & 0x02) and not (flags & 0x10):
+                            
+                            if not args.host_only or src != LOCAL_IP:
                                 syn_counter[src] += 1
                                 if syn_counter[src] > args.threshold:
                                     stats['ALERTS'] += 1
@@ -158,12 +163,12 @@ def start_dashboard(stdscr, args):
                         else:
                             log_msg = f"[TCP] {src}:{src_port} -> {dest_port} F:{flags}"
 
-                    elif proto == 17: 
+                    elif proto == 17:
                         stats['UDP'] += 1
                         src_port, dest_port, size, data = udp_segment(data)
                         
                         if src_port in [1900, 5353] or dest_port in [1900, 5353]:
-                            continue 
+                            continue
 
                         app_layer_info = parse_application_layer(data, src_port, dest_port)
                         if app_layer_info:
@@ -179,8 +184,18 @@ def start_dashboard(stdscr, args):
                         logs.append(log_msg)
                         if len(logs) > 50: logs.pop(0)
 
-                elif eth_proto == 1544:
-                     pass
+                elif eth_proto == 0x0806:
+ 
+                    try:
+                        sender_ip, target_ip, opcode, sender_mac, target_mac = arp_packet(data)
+                        log_msg = f"[ARP] {sender_ip} -> {target_ip} ({opcode})"
+                        stats['TOTAL'] += 0
+                    except Exception:
+                        pass
+
+            else:
+
+                continue
 
         except BlockingIOError:
             pass

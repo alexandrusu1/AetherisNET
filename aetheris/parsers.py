@@ -4,7 +4,7 @@ from .utils import get_mac_addr, ipv4
 
 def ethernet_frame(data):
     dest_mac, src_mac, proto = struct.unpack('! 6s 6s H', data[:14])
-    return get_mac_addr(dest_mac), get_mac_addr(src_mac), socket.htons(proto), data[14:]
+    return get_mac_addr(dest_mac), get_mac_addr(src_mac), proto, data[14:]
 
 def ipv4_packet(data):
     version_header_length = data[0]
@@ -20,12 +20,12 @@ def tcp_segment(data):
     return src_port, dest_port, sequence, acknowledgment, flags, data[offset:]
 
 def udp_segment(data):
-    src_port, dest_port, size = struct.unpack('! H H 2x H', data[:8])
-    return src_port, dest_port, size, data[8:]
+    src_port, dest_port, length, checksum = struct.unpack('! H H H H', data[:8])
+    return src_port, dest_port, length, data[8:]
 
 def arp_packet(data):
-    htype, ptype, hlen, plen, opcode, sender_mac, sender_ip, target_mac, target_ip = struct.unpack('! 2s 2s 1s 1s 2s 6s 4s 6s 4s', data[:28])
-    return socket.inet_ntoa(sender_ip), socket.inet_ntoa(target_ip), int.from_bytes(opcode, "big")
+    htype, ptype, hlen, plen, opcode, sender_mac, sender_ip, target_mac, target_ip = struct.unpack('! H H B B H 6s 4s 6s 4s', data[:28])
+    return socket.inet_ntoa(sender_ip), socket.inet_ntoa(target_ip), opcode, get_mac_addr(sender_mac), get_mac_addr(target_mac)
 
 def parse_application_layer(data, src_port, dest_port):
     if src_port in [80, 8080] or dest_port in [80, 8080]:

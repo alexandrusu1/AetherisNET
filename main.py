@@ -23,6 +23,10 @@ def main():
     parser.add_argument("-p", "--pcap", 
                         help="Save captured traffic to PCAP file (e.g., dump.pcap)", 
                         default=None)
+    parser.add_argument("--host-only",
+                        help="Only process packets where local host is source or destination (reduces noise)",
+                        action="store_true",
+                        default=False)
     
     args = parser.parse_args()
     
