@@ -3,12 +3,11 @@ import sys
 import time
 import struct
 import curses
+import argparse
 from datetime import datetime
 from collections import defaultdict
 
 ETH_P_ALL = 3
-THRESHOLD = 15
-LOG_FILE = "threats.log"
 
 stats = {
     "TCP": 0,
@@ -29,9 +28,9 @@ def get_mac_addr(bytes_addr):
 def ipv4(addr):
     return socket.inet_ntoa(addr)
 
-def log_threat(message):
+def log_threat(message, log_file):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_FILE, "a") as f:
+    with open(log_file, "a") as f:
         f.write(f"[{timestamp}] {message}\n")
 
 def ipv4_packet(data):
@@ -55,7 +54,7 @@ def ethernet_frame(data):
     dest_mac, src_mac, proto = struct.unpack('! 6s 6s H', data[:14])
     return get_mac_addr(dest_mac), get_mac_addr(src_mac), socket.htons(proto), data[14:]
 
-def draw_dashboard(stdscr):
+def draw_dashboard(stdscr, args):
     curses.start_color()
     curses.use_default_colors()
     curses.init_pair(1, curses.COLOR_GREEN, -1)
@@ -68,9 +67,16 @@ def draw_dashboard(stdscr):
 
     try:
         sniffer = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(ETH_P_ALL))
+        if args.interface:
+            sniffer.bind((args.interface, 0))
         sniffer.setblocking(False) 
     except PermissionError:
         stdscr.addstr(0, 0, "CRITICAL ERROR: Run with SUDO!", curses.color_pair(2))
+        stdscr.refresh()
+        time.sleep(3)
+        return
+    except OSError:
+        stdscr.addstr(0, 0, f"ERROR: Interface {args.interface} not found!", curses.color_pair(2))
         stdscr.refresh()
         time.sleep(3)
         return
@@ -87,7 +93,7 @@ def draw_dashboard(stdscr):
             continue
 
         try:
-            title = " AetherisNET v1.1 - Network Monitor & IDS "
+            title = f" AetherisNET v1.2 - Monitoring: {args.interface if args.interface else 'ALL'} "
             stdscr.attron(curses.color_pair(4) | curses.A_BOLD)
             safe_width = width - 1
             stdscr.addstr(0, 0, (title + " " * width)[:safe_width]) 
@@ -101,7 +107,7 @@ def draw_dashboard(stdscr):
             stdscr.addstr(6, 2, f"[!] THREATS DETECTED: {stats['ALERTS']}", alert_style)
             
             if stats['ALERTS'] > 0:
-                stdscr.addstr(6, 40, f"(Logged to {LOG_FILE})", curses.color_pair(3))
+                stdscr.addstr(6, 40, f"(Logged to {args.log})", curses.color_pair(3))
 
             stdscr.addstr(8, 0, "-" * (width - 1)) 
             stdscr.addstr(9, 2, "LIVE TRAFFIC LOGS:", curses.A_UNDERLINE)
@@ -132,11 +138,11 @@ def draw_dashboard(stdscr):
                     
                     if (flags & 0x02) and not (flags & 0x10): 
                         syn_counter[src] += 1
-                        if syn_counter[src] > THRESHOLD:
+                        if syn_counter[src] > args.threshold:
                             stats['ALERTS'] += 1
                             msg = f"ALERT: SYN SCAN from {src} -> {target}"
                             log_msg = f"[!!!] {msg}"
-                            log_threat(msg)
+                            log_threat(msg, args.log)
                         else:
                             log_msg = f"[?] SUSPICIOUS: SYN packet {src} -> {target}"
                     else:
@@ -171,4 +177,11 @@ def draw_dashboard(stdscr):
         stdscr.refresh()
 
 if __name__ == "__main__":
-    curses.wrapper(draw_dashboard)
+    parser = argparse.ArgumentParser(description="AetherisNET - Raw Socket IDS & Traffic Analyzer")
+    parser.add_argument("-i", "--interface", help="Network interface to bind to (e.g., wlan0, eth0)", default=None)
+    parser.add_argument("-t", "--threshold", type=int, help="SYN Flood detection threshold (default: 15)", default=15)
+    parser.add_argument("-l", "--log", help="Log file path (default: threats.log)", default="threats.log")
+    
+    args = parser.parse_args()
+    
+    curses.wrapper(draw_dashboard, args)
