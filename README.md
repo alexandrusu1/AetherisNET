@@ -6,9 +6,6 @@
 
 AetherisNET is a lightweight, terminal-first Intrusion Detection System (IDS) implemented in Python. It provides a simple, extensible foundation for monitoring network traffic in real-time using raw sockets and a curses-based TUI.
 
---
-
-⭐ If you like this project, please give it a star — help us reach 500 stars!
 
 ## Features
 - Real-time TUI dashboard using `curses` (statistics, PPS chart, live event log)
