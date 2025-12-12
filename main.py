@@ -3,10 +3,12 @@ import sys
 import time
 import struct
 import curses
+from datetime import datetime
 from collections import defaultdict
 
 ETH_P_ALL = 3
 THRESHOLD = 15
+LOG_FILE = "threats.log"
 
 stats = {
     "TCP": 0,
@@ -26,6 +28,11 @@ def get_mac_addr(bytes_addr):
 
 def ipv4(addr):
     return socket.inet_ntoa(addr)
+
+def log_threat(message):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(LOG_FILE, "a") as f:
+        f.write(f"[{timestamp}] {message}\n")
 
 def ipv4_packet(data):
     version_header_length = data[0]
@@ -80,7 +87,7 @@ def draw_dashboard(stdscr):
             continue
 
         try:
-            title = " AetherisNET v1.0 - Network Monitor & IDS "
+            title = " AetherisNET v1.1 - Network Monitor & IDS "
             stdscr.attron(curses.color_pair(4) | curses.A_BOLD)
             safe_width = width - 1
             stdscr.addstr(0, 0, (title + " " * width)[:safe_width]) 
@@ -92,6 +99,9 @@ def draw_dashboard(stdscr):
             
             alert_style = curses.color_pair(2) | curses.A_BOLD if stats['ALERTS'] > 0 else curses.color_pair(1)
             stdscr.addstr(6, 2, f"[!] THREATS DETECTED: {stats['ALERTS']}", alert_style)
+            
+            if stats['ALERTS'] > 0:
+                stdscr.addstr(6, 40, f"(Logged to {LOG_FILE})", curses.color_pair(3))
 
             stdscr.addstr(8, 0, "-" * (width - 1)) 
             stdscr.addstr(9, 2, "LIVE TRAFFIC LOGS:", curses.A_UNDERLINE)
@@ -124,7 +134,9 @@ def draw_dashboard(stdscr):
                         syn_counter[src] += 1
                         if syn_counter[src] > THRESHOLD:
                             stats['ALERTS'] += 1
-                            log_msg = f"[!!!] ALERT: SYN SCAN from {src} -> {target}"
+                            msg = f"ALERT: SYN SCAN from {src} -> {target}"
+                            log_msg = f"[!!!] {msg}"
+                            log_threat(msg)
                         else:
                             log_msg = f"[?] SUSPICIOUS: SYN packet {src} -> {target}"
                     else:
@@ -143,9 +155,9 @@ def draw_dashboard(stdscr):
                     logs.append(log_msg)
                     if len(logs) > MAX_LOGS:
                         logs.pop(0)
-
+                        
         except BlockingIOError:
-            pass
+            time.sleep(0.01)
         except Exception:
             pass
 
@@ -157,7 +169,6 @@ def draw_dashboard(stdscr):
             pass
         
         stdscr.refresh()
-        time.sleep(0.1)
 
 if __name__ == "__main__":
     curses.wrapper(draw_dashboard)
