@@ -1,9 +1,8 @@
 import argparse
 import curses
 import sys
-
-
 from aetheris.ui import start_dashboard
+from aetheris.utils import init_pcap
 
 def main():
     parser = argparse.ArgumentParser(description="AetherisNET - Enterprise Grade Network IDS")
@@ -21,15 +20,21 @@ def main():
                         help="Log file path (default: threats.log)", 
                         default="threats.log")
     
+    parser.add_argument("-p", "--pcap", 
+                        help="Save captured traffic to PCAP file (e.g., dump.pcap)", 
+                        default=None)
+    
     args = parser.parse_args()
     
+    if args.pcap:
+        init_pcap(args.pcap)
+    
     try:
-
         curses.wrapper(start_dashboard, args)
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception as e:
-        print(f"Critial Error: {e}")
+        sys.stderr.write(f"Critical Error: {e}\n")
         sys.exit(1)
 
 if __name__ == "__main__":

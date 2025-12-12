@@ -3,7 +3,7 @@ import socket
 import time
 from collections import defaultdict, deque
 from .parsers import ethernet_frame, ipv4_packet, tcp_segment, udp_segment, parse_application_layer, arp_packet
-from .utils import log_threat, get_local_ip 
+from .utils import log_threat, get_local_ip, save_pcap
 
 ETH_P_ALL = 3
 MAX_LOGS = 12 
@@ -116,6 +116,10 @@ def start_dashboard(stdscr, args):
         try:
             for _ in range(15): 
                 raw_data, addr = sniffer.recvfrom(65535)
+                
+                if args.pcap:
+                    save_pcap(raw_data)
+
                 packet_count_second += 1
                 stats['TOTAL'] += 1
                 
@@ -160,7 +164,6 @@ def start_dashboard(stdscr, args):
                         
                         if src_port in [1900, 5353] or dest_port in [1900, 5353]:
                             continue 
-
 
                         app_layer_info = parse_application_layer(data, src_port, dest_port)
                         if app_layer_info:

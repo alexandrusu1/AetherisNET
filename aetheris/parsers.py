@@ -28,7 +28,7 @@ def arp_packet(data):
     return socket.inet_ntoa(sender_ip), socket.inet_ntoa(target_ip), int.from_bytes(opcode, "big")
 
 def parse_application_layer(data, src_port, dest_port):
-    if src_port == 80 or dest_port == 80 or src_port == 8080 or dest_port == 8080:
+    if src_port in [80, 8080] or dest_port in [80, 8080]:
         try:
             text = data.decode('utf-8', errors='ignore')
             if "GET /" in text or "POST /" in text or "HTTP/1." in text:
@@ -39,6 +39,15 @@ def parse_application_layer(data, src_port, dest_port):
         except:
             pass
 
+    if src_port == 443 or dest_port == 443:
+        try:
+            if len(data) > 0 and data[0] == 0x16: 
+                return f"[HTTPS] TLS Handshake"
+            elif len(data) > 0 and data[0] == 0x17:
+                return f"[HTTPS] Encrypted Data"
+        except:
+            pass
+
     if src_port == 53 or dest_port == 53:
         try:
             idx = 12
@@ -46,7 +55,7 @@ def parse_application_layer(data, src_port, dest_port):
             while idx < len(data):
                 length = data[idx]
                 if length == 0: break
-                if length > 63: return "[DNS] (Compressed/Complex)"
+                if length > 63: return "[DNS] (Complex)"
                 idx += 1
                 domain_parts.append(data[idx:idx+length].decode('utf-8', errors='ignore'))
                 idx += length

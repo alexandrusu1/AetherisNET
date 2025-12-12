@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aetherisnet"
+version = "0.2.0"
+description = "Lightweight terminal IDS and network sniffer"
+authors = [{name = "alexandrusu1"}]
+requires-python = ">=3.10"

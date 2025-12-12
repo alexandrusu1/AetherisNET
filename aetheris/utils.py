@@ -1,5 +1,41 @@
 import socket
+import struct
+import time
 from datetime import datetime
+
+class PcapLogger:
+    def __init__(self, filename):
+        self.filename = filename
+        self.start_pcap()
+
+    def start_pcap(self):
+        global_header = struct.pack('! I H H i I I I', 
+            0xa1b2c3d4, 2, 4, 0, 0, 65535, 1
+        )
+        with open(self.filename, 'wb') as f:
+            f.write(global_header)
+
+    def write_packet(self, raw_data):
+        ts = time.time()
+        sec = int(ts)
+        usec = int((ts - sec) * 1000000)
+        length = len(raw_data)
+
+        pkt_header = struct.pack('! I I I I', sec, usec, length, length)
+        
+        with open(self.filename, 'ab') as f:
+            f.write(pkt_header)
+            f.write(raw_data)
+
+pcap_engine = None 
+
+def init_pcap(filename):
+    global pcap_engine
+    pcap_engine = PcapLogger(filename)
+
+def save_pcap(raw_data):
+    if pcap_engine:
+        pcap_engine.write_packet(raw_data)
 
 def get_local_ip():
     try:
@@ -10,7 +46,6 @@ def get_local_ip():
         return local_ip
     except:
         return "127.0.0.1"
-
 
 def get_mac_addr(bytes_addr):
     bytes_str = map('{:02x}'.format, bytes_addr)
