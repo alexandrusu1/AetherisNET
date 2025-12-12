@@ -1,9 +1,8 @@
-# .gitignore
-__pycache__/
-*.py[cod]
-*$py.class
-.vscode/
-venv/
-env/
+
+# Your local rules
+node_modules/
+dist/
+
+# Remote rules from GitHub
 *.log
 .DS_Store
