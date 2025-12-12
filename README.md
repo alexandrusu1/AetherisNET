@@ -70,9 +70,6 @@ We welcome contributions — see `CONTRIBUTING.md` for details.
 ## Releases & Changelog
 See `CHANGELOG.md` for release notes and history.
 
-## Demo / Screenshots
-You can generate a demo GIF locally using `asciinema` + `agg` or `ttyrec` + `gifenc` and then add it to `docs/demo.gif`.
-
 ## How you can help this project grow
 - Star the repository — it helps others discover the project.
 - Open issues for bugs and feature requests.
